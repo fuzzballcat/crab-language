@@ -1,12 +1,31 @@
+# utility
+module SafeGet
+ def get?(i)
+    return self.size <= i ? nil : self[i]
+  end
+end
+
+class Array 
+  include SafeGet
+end
+class String
+  include SafeGet
+end
+
+# lexer
+
 enum TokenType
   ERR_INV
   IGNORE
+
+  NEWLINE
   
   KEYWORD
   IDENTIFIER
   PUNC
   OPERATOR
   NUMBER
+  STRING
 end
 
 class Token
@@ -18,9 +37,21 @@ def accept (s : String) : { Int32, TokenType }
   if s[0] == ' ' || s[0] == '\t' 
     return { 1, TokenType::IGNORE }
   end
+
+  if s[0] == '\n'
+    i = 0
+    while s[i] == '\n'
+      i += 1
+    end
+    return { i, TokenType::NEWLINE }
+  end
   
-  if s[0] == '(' || s[0] == ')'
+  if s[0] == '(' || s[0] == ')' || s[0] == ':' || s[0] == '{' || s[0] == '}'
     return { 1, TokenType::PUNC }
+  end
+
+  if (s[0] == '=' || s[0] == '-') && s.get?(1) == '>'
+    return { 2, TokenType::PUNC }
   end
 
   if s[0].to_i? != nil
@@ -39,7 +70,23 @@ def accept (s : String) : { Int32, TokenType }
     return { i, TokenType::IDENTIFIER }
   end
 
-  if s[0] == '+' || s[0] == '-' || s[0] == '*' || s[0] == '/'
+  if s[0] == '"'
+    i = 1
+    while s[i] != '"'
+      if s[i] == '\\'
+        i += 1
+      end
+
+      i += 1
+      if i >= s.size
+        print "Unterminated string literal"
+        exit 1
+      end 
+    end
+    return { i+1, TokenType::STRING }
+  end
+
+  if s[0] == '+' || (s[0] == '-' && s.get?(1) != '>') || s[0] == '*' || s[0] == '/'
     return { 1, TokenType::OPERATOR }
   end
 
@@ -54,6 +101,9 @@ def tokenize (source : String) : Array(Token)
       errstr = ""
       while accepted[1] == TokenType::ERR_INV
         errstr += source[0]
+        if source.size == 1 
+          break 
+        end
         source = source[1..source.size]
         accepted = accept(source)
       end
@@ -76,7 +126,9 @@ end
 source = File.read "test.src"
 toks = tokenize source
 
-puts toks
+pp toks
+
+# parsing
 
 enum ASTType
   UnaryExp
