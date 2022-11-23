@@ -1,0 +1,29 @@
+// Maybe
+Some T => x:T -> Some x:Maybe T
+None T =>        None  :Maybe T      // omission of ->
+
+//// red-black tree w/ type-level
+
+// Color
+Red   -> Red  :Color
+Black -> Black:Color
+
+// Natural numbers
+Z       -> Z    :Nat
+S n:Nat -> (S n):Nat
+
+// Tree itself
+Leaf  T => Node:Node Black Z T
+BNode T => l:(Node lc h T) v:T r:(Node rc h T) -> (Node l v r):Node Black (S h) T
+RNode T => l:(Node Black h T) v:T r:(Node Black h T) -> (Node l v r):Node Red h T
+
+//// do things
+
+Pass T => x:T -> Pass x:Result T
+Fail T => x:T -> Fail x:Result T
+
+main -> {
+  print "yay"
+
+  Pass ()
+}:Result () Int

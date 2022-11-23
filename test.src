@@ -1,0 +1,8 @@
+Pass T => x:T -> Pass x:Result T
+Fail T => x:T -> Fail x:Result T
+
+main -> {
+  print "yay"
+
+  Pass ()
+}:Result () Int
