@@ -12,7 +12,121 @@ class String
   include SafeGet
 end
 
+module Colors
+  BLACK = "\u001b[30m"
+  RED = "\u001b[31m"
+  GREEN = "\u001b[32m"
+  YELLOW = "\u001b[33m"
+  BLUE = "\u001b[34m"
+  MAGENTA = "\u001b[35m"
+  CYAN = "\u001b[36m"
+  WHITE = "\u001b[37m"
+  RESET = "\u001b[0m"
+
+  BRIGHTBLACK = "\u001b[30;1m"
+  BRIGHTRED = "\u001b[31;1m"
+  BRIGHTGREEN = "\u001b[32;1m"
+  BRIGHTYELLOW = "\u001b[33;1m"
+  BRIGHTBLUE = "\u001b[34;1m"
+  BRIGHTMAGENTA = "\u001b[35;1m"
+  BRIGHTCYAN = "\u001b[36;1m"
+  BRIGHTWHITE = "\u001b[37;1m"
+
+  BOLD = "\u001b[1m"
+  UNDERLINE = "\u001b[4m"
+  REVERSED = "\u001b[7m"
+end
+
 # lexer
+
+class Lexer
+  @@source = File.read "test.src"
+  @@lineno = 0
+  @@colno  = 0
+
+  @@original_source : String = @@source
+  def self.original_source
+    return @@original_source
+  end
+  
+  # eek
+  def self.source
+    return @@source
+  end
+  def self.source=(@@source)
+  end
+
+  def self.lineno
+    return @@lineno
+  end
+  def self.lineno=(@@lineno)
+  end
+
+  def self.colno
+    return @@colno
+  end
+  def self.colno=(@@colno)
+  end
+end
+
+class Error
+  def initialize(@type : String, @message : String, @line : Int32, @col : Int32, @len : Int32, @truncate : Bool = false)
+  end
+
+  def throw!
+    print Colors::RED
+    print @type
+    print Colors::RESET
+    print ": "
+    puts @message
+
+    print "On line "
+    print @line
+    print ", col "
+    print @col
+    print ":\n\n"
+
+    print Colors::BLUE
+    print @line
+    print " |"
+    print Colors::RESET
+    
+    sourceline = (Lexer.original_source.split "\n")[@line][0..@col+@len-1]
+    print sourceline
+    if @truncate
+      print "..."
+    end
+    print "\n"
+  
+    print " " * (@line.to_s.size + 2 + @col)
+    print Colors::RED
+    print Colors::BOLD
+    print "^" * @len
+    print Colors::RESET
+
+    print "\n"
+    exit 1
+  end
+end
+
+class LexingError < Error
+  def initialize(message : String, line : Int32, col : Int32, len : Int32)
+    super("LexingError", message, line, col, len)
+  end
+end
+
+class UnterminatedStringError < LexingError
+  def initialize(line : Int32, col : Int32)
+    super("Unterminated string literal", line, col, 5)
+    @truncate = true
+  end
+end
+
+class InvalidTokenError < LexingError
+  def initialize(tok : String, @line : Int32, @col : Int32)
+    super("Invalid token \"#{tok}\"", line, col, tok.size)
+  end
+end
 
 enum TokenType
   ERR_INV
@@ -31,6 +145,12 @@ end
 class Token
   def initialize(@type : TokenType, @val : String)
   end
+end
+
+def purdypront (x : Token)
+  print x.@type
+  print ": "
+  puts x.@val
 end
 
 def accept (s : String) : { Int32, TokenType }
@@ -79,8 +199,7 @@ def accept (s : String) : { Int32, TokenType }
 
       i += 1
       if i >= s.size
-        print "Unterminated string literal"
-        exit 1
+        UnterminatedStringError.new(Lexer.lineno, Lexer.colno).throw!
       end 
     end
     return { i+1, TokenType::STRING }
@@ -93,62 +212,83 @@ def accept (s : String) : { Int32, TokenType }
   return { 1, TokenType::ERR_INV }
 end
 
-def tokenize (source : String) : Array(Token)
-  to_ret = [] of Token
-  while !source.empty?
-    accepted = accept(source)
+def nextok () : Token | Nil
+  while true
+    if Lexer.source.empty?
+      return nil
+    end
+  
+    accepted = accept(Lexer.source)
     if accepted[1] == TokenType::ERR_INV
       errstr = ""
       while accepted[1] == TokenType::ERR_INV
-        errstr += source[0]
-        if source.size == 1 
+        errstr += Lexer.source[0]
+        if Lexer.source.size == 1 
           break 
         end
-        source = source[1..source.size]
-        accepted = accept(source)
+        Lexer.source = Lexer.source[1..Lexer.source.size]
+        accepted = accept(Lexer.source)
       end
-      print "Invalid token:\n"
-      print errstr
-      print "\n"
-      exit 1
+
+      InvalidTokenError.new(errstr, Lexer.lineno, Lexer.colno).throw!
     end
 
+    token_text = Lexer.source[0..(accepted[0] - 1)]
+    token_text.each_char do |c|
+      if c == '\n'
+        Lexer.lineno += 1
+        Lexer.colno = 0
+      else
+        Lexer.colno  += 1
+      end
+    end
+    Lexer.source = Lexer.source[accepted[0]..Lexer.source.size]
+  
     if accepted[1] != TokenType::IGNORE
-      to_ret.push Token.new(accepted[1], source[0..(accepted[0] - 1)])
+      return Token.new(accepted[1], token_text)
     end
-
-    source = source[accepted[0]..]
   end
-
-  return to_ret
 end
 
-source = File.read "test.src"
-toks = tokenize source
+def expect (t : TokenType) : Token
+  n = nextok
+  if !n || n.@type != t
+    exit 1 # todo
+  end
+  return n
+end
 
-pp toks
+def expect (t : String) : Token
+  n = nextok
+  if !n || n.@val != t
+    exit 1 # todo
+  end
+  return n
+end
+
+while true
+  nextok
+end
 
 # parsing
 
-enum ASTType
-  UnaryExp
-  BinaryExp
-  Num
-end
-
-class AST
-  def initialize(@type : ASTType, @subnodes : Array(AST))
+class CST
+  def initialize(@subnodes : Array(CST))
   end
 end
 
-def purdypront (x : AST)
-  case x.@type
-  when ASTType::UnaryExp
+def purdypront (x : CST)
+  case x
+  when Unop
     print "UnaryExp ("
-  when ASTType::BinaryExp
-    print "BinaryExp ( " + x.as(Binop).@op + ", "
-  when ASTType::Num
-    print "Num (" + x.as(Num).@value.to_s
+  when Binop
+    print "BinaryExp ( " + x.@op + ", "
+  when Num
+    print "Num (" + x.@value.to_s
+  when Identifier
+    print "Identifier (" + x.@value
+  when TopLevelDefList
+    print "TopLevelDefs ("
   end
 
   x.@subnodes.each do |i|
@@ -159,24 +299,44 @@ def purdypront (x : AST)
   print ")"
 end
 
-class Num < AST
+class Num < CST
   def initialize(@value : Int32)
-    @type = ASTType::Num
-    @subnodes = [] of AST
+    @subnodes = [] of CST
   end
 end
 
-class Binop < AST
-  def initialize(@lhs : AST, @rhs : AST, @op : String)
-    @type = ASTType::BinaryExp
+class Identifier < CST
+  def initialize(@value : String)
+    @subnodes = [] of CST
+  end
+end
+
+class Unop < CST
+  def initialize(@rhs : CST, @op : String)
+    @subnodes = [@rhs]
+  end
+end
+
+class Binop < CST
+  def initialize(@lhs : CST, @rhs : CST, @op : String)
     @subnodes = [@lhs, @rhs]
   end
-end 
+end
 
-def parse_atom (source : Array(Token)) : AST
+class TopLevelDefList < CST
+  def initialize(@subnodes : Array(CST))
+  end
+end
+
+def parse_atom (source : Array(Token)) : CST
   if source[0].@type == TokenType::NUMBER
     a = source.shift
     return Num.new(a.@val.to_i)
+  end
+
+  if source[0].@type == TokenType::IDENTIFIER
+    a = source.shift
+    return Identifier.new(a.@val)
   end
 
   if source[0].@val == "("
@@ -190,12 +350,12 @@ def parse_atom (source : Array(Token)) : AST
     return a
   end
 
-  print "ERR_PARSING_ATOM : GOT"
-  puts source[0]
+  print "Error when parsing: expected expression, found "
+  purdypront source[0]
   exit 1
 end
 
-def parse_binary_p1 (source : Array(Token)) : AST
+def parse_binary_p1 (source : Array(Token)) : CST
   lhs = parse_atom(source)
   while source.size > 0 && (source[0].@val == "*" || source[0].@val == "/")
     typ = source.shift.@val
@@ -205,7 +365,7 @@ def parse_binary_p1 (source : Array(Token)) : AST
   return lhs
 end
 
-def parse_binary_p2 (source : Array(Token)) : AST
+def parse_binary_p2 (source : Array(Token)) : CST
   lhs = parse_binary_p1(source)
   while source.size > 0 && (source[0].@val == "+" || source[0].@val == "-")
     typ = source.shift.@val
@@ -215,14 +375,23 @@ def parse_binary_p2 (source : Array(Token)) : AST
   return lhs
 end
 
-def parse_expr (source : Array(Token)) : AST
+def parse_expr (source : Array(Token)) : CST
   return parse_binary_p2(source)
 end
 
-def parse (source : Array(Token)) : AST
-  return parse_expr(source)
+def parse_def(source : Array(Token)) : CST
+  return TopLevelDefList.new([] of CST) # todo
 end
 
-ast = parse toks
-purdypront ast
+def parse () : CST
+  defs = [] of CST
+  while Lexer.source.size > 0
+    defn = parse_def ([] of Token) #todo
+    defs.push defn
+  end
+  return TopLevelDefList.new(defs)
+end
+
+cst = parse
+purdypront cst
 puts ""
