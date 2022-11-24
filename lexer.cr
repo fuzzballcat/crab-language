@@ -28,65 +28,6 @@ class Lexer
   end
 end
 
-class Error
-  def initialize(@type : String, @message : String, @line : Int32, @col : Int32, @len : Int32, @truncate : Bool = false)
-  end
-
-  def throw!
-    print Colors::RED
-    print @type
-    print Colors::RESET
-    print ": "
-    puts @message
-
-    print "On line "
-    print @line
-    print ", col "
-    print @col
-    print ":\n\n"
-
-    print Colors::BLUE
-    print @line
-    print " |"
-    print Colors::RESET
-    
-    sourceline = (Lexer.original_source.split "\n")[@line][0..@col+@len-1]
-    print sourceline
-    if @truncate
-      print "..."
-    end
-    print "\n"
-  
-    print " " * (@line.to_s.size + 2 + @col)
-    print Colors::RED
-    print Colors::BOLD
-    print "^" * @len
-    print Colors::RESET
-
-    print "\n"
-    exit 1
-  end
-end
-
-class LexingError < Error
-  def initialize(message : String, line : Int32, col : Int32, len : Int32)
-    super("LexingError", message, line, col, len)
-  end
-end
-
-class UnterminatedStringError < LexingError
-  def initialize(line : Int32, col : Int32)
-    super("Unterminated string literal", line, col, 5)
-    @truncate = true
-  end
-end
-
-class InvalidTokenError < LexingError
-  def initialize(tok : String, @line : Int32, @col : Int32)
-    super("Invalid token \"#{tok}\"", line, col, tok.size)
-  end
-end
-
 enum TokenType
   ERR_INV
   IGNORE
@@ -212,7 +153,7 @@ end
 def expect (t : TokenType) : Token
   n = nextok
   if !n || n.@type != t
-    exit 1 # todo
+    
   end
   return n
 end

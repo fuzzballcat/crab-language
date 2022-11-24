@@ -1,4 +1,5 @@
 require "./utility.cr"
+require "./error.cr"
 require "./lexer.cr"
 
 # parsing
