@@ -2,6 +2,7 @@ class Lexer
   @@source = File.read "test.src"
   @@lineno = 0
   @@colno  = 0
+  @@ignore_newlines = false
 
   @@original_source : String = @@source
   def self.original_source
@@ -26,11 +27,18 @@ class Lexer
   end
   def self.colno=(@@colno)
   end
+
+  def self.ignore_newlines
+    return @@ignore_newlines
+  end
+  def self.ignore_newlines=(@@ignore_newlines)
+  end
 end
 
 enum TokenType
   ERR_INV
   IGNORE
+  EOF
 
   NEWLINE
   
@@ -40,10 +48,11 @@ enum TokenType
   OPERATOR
   NUMBER
   STRING
+  NONEVAL
 end
 
 class Token
-  def initialize(@type : TokenType, @val : String)
+  def initialize(@type : TokenType, @val : String, @lineno : Int32, @colno : Int32)
   end
 end
 
@@ -63,10 +72,17 @@ def accept (s : String) : { Int32, TokenType }
     while s[i] == '\n'
       i += 1
     end
+    if Lexer.ignore_newlines
+      return { i, TokenType::IGNORE }
+    end
     return { i, TokenType::NEWLINE }
   end
-  
-  if s[0] == '(' || s[0] == ')' || s[0] == ':' || s[0] == '{' || s[0] == '}'
+
+  if s[0] == '(' && s.get?(1) == ')'
+    return { 2, TokenType::NONEVAL }
+  end
+
+  if s[0] == '(' || s[0] == ')' || s[0] == ':' || s[0] == '{' || s[0] == '}' || s[0] == ';'
     return { 1, TokenType::PUNC }
   end
 
@@ -112,10 +128,10 @@ def accept (s : String) : { Int32, TokenType }
   return { 1, TokenType::ERR_INV }
 end
 
-def nextok () : Token | Nil
+def nextok () : Token
   while true
     if Lexer.source.empty?
-      return nil
+      return Token.new(TokenType::EOF, " ", Lexer.lineno, Lexer.colno)
     end
   
     accepted = accept(Lexer.source)
@@ -134,6 +150,8 @@ def nextok () : Token | Nil
     end
 
     token_text = Lexer.source[0..(accepted[0] - 1)]
+    token_line = Lexer.lineno
+    token_col  = Lexer.colno
     token_text.each_char do |c|
       if c == '\n'
         Lexer.lineno += 1
@@ -145,27 +163,45 @@ def nextok () : Token | Nil
     Lexer.source = Lexer.source[accepted[0]..Lexer.source.size]
   
     if accepted[1] != TokenType::IGNORE
-      return Token.new(accepted[1], token_text)
+      return Token.new(accepted[1], token_text, token_line, token_col)
     end
   end
 end
 
-def expect (t : TokenType) : Token
+def expect (t : TokenType, p : String? = nil, customHint : String? = nil) : Token
   n = nextok
-  if !n || n.@type != t
-    
+  if n.@type != t
+    ExpectError.new(t.to_s, n.@type.to_s, n.@lineno, n.@colno, n.@val.size, p, customHint).throw!
   end
   return n
 end
 
-def expect (t : String) : Token
+def expect (t : String, p : String? = nil, customHint : String? = nil) : Token
   n = nextok
-  if !n || n.@val != t
-    exit 1 # todo
+  if n.@val != t
+    ExpectError.new(t, n.@val, n.@lineno, n.@colno, n.@val.size, p, customHint).throw!
   end
   return n
 end
 
-while true
-  nextok
+# absolute hacky, probably bad on perf
+def peek (num : Int32 = 1) : Token
+  sr = Lexer.source
+  ln = Lexer.lineno
+  cn = Lexer.colno
+
+  n = nextok
+
+  # multipeek support
+  i = 1
+  while i < num
+    n = nextok
+    i += 1
+  end
+
+  Lexer.source = sr
+  Lexer.lineno = ln
+  Lexer.colno  = cn
+
+  return n
 end

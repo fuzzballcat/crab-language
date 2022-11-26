@@ -1,6 +1,6 @@
 // Maybe
 Some T => x:T -> Some x:Maybe T
-None T =>        None  :Maybe T      // omission of ->
+None T =>     -> None  :Maybe T      // omit ->
 
 //// red-black tree w/ type-level
 
@@ -13,9 +13,18 @@ Z       -> Z    :Nat
 S n:Nat -> (S n):Nat
 
 // Tree itself
-Leaf  T => Node:Node Black Z T
+Leaf  T => -> Leaf:Node Black Z T
 BNode T => l:(Node lc h T) v:T r:(Node rc h T) -> (Node l v r):Node Black (S h) T
 RNode T => l:(Node Black h T) v:T r:(Node Black h T) -> (Node l v r):Node Red h T
+
+//// map & list example
+
+Nil  A =>                -> Nil       :List A
+Cons A => a:A l:(List A) -> (Cons a l):List A
+
+// streamline... "|" ?
+map A B => f:(A -> B) (Cons x y):(List A) -> (Cons (f x) (map f y)):(List B)
+map A B => f:(A -> B) Nil:List A -> Nil:List B
 
 //// do things
 

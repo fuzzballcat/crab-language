@@ -116,6 +116,18 @@ end
 
 class ParsingError < Error
   def initialize(message : String, line : Int32, col : Int32, len : Int32)
-    super("ParsingError", message, line, col, len)
+    super("SyntaxError", message, line, col, len)
+  end
+end
+
+class ExpectError < ParsingError
+  def initialize(expected : String, found : String, line : Int32, col : Int32, len : Int32, wasparsing : String? = nil, customHint : String? = nil)
+    super("Expected " + expected + ", found " + found, line, col, len)
+
+    if wasparsing
+      @hint = "While trying to parse " + wasparsing + ", this was found instead."
+    elsif customHint
+      @hint = customHint
+    end
   end
 end
